@@ -133,7 +133,7 @@ def test_parallel_jobs_run_in_separate_processes(manager, sample_request: Submit
         manager._run_isolated("job-1", sample_request, lambda *args: reported.append(args), lambda: False)
     )
 
-    assert str(archive) == "/tmp/trained.zip"
+    assert archive.as_posix() == "/tmp/trained.zip"
     assert len(reported) == 1
     assert reported[0][0] == 40 and reported[0][2] is None
     assert int(reported[0][1]) != os.getpid()

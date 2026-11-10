@@ -7,6 +7,10 @@ relative to ``pai/<session_id>/``: ``cmd/<component>`` and ``evt/<component>``
 for pub/sub, ``rpc/<component>/<op>`` for requests. Payloads are pydantic
 models as JSON. Joints and frames go through the :mod:`store`, not the bus.
 
+zenoh has no Unix sockets on Windows, so there the router listens on a loopback
+TCP port behind a per-session password; the port and password are left for the
+workers in a file at :func:`socket_path`, inside the user's own temp directory.
+
 See the "Event bus" section of docs/feature_plans/runtime-inhousing-plan.md.
 """
 
@@ -15,6 +19,9 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import secrets
+import socket
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -30,6 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
 _ROOT = "pai"
+_BUS_USER = "pai"
 
 EVENTS = "evt/session"
 """The session's general channel, which its socket forwards: ``SessionEvent`` messages from the session."""
@@ -140,18 +148,41 @@ class Bus:
         self._prefix = f"{_ROOT}/{session_id}/"
         self._session = zenoh.open(config)
         self._declared: set[Declaration] = set()
+        self._rendezvous: Path | None = None
+        """The Windows port-and-password file this host wrote, removed on close."""
 
     @classmethod
     def host(cls, session_id: str) -> Bus:
         """The session process's bus: listens on the session's socket."""
         path = socket_path(session_id)
         path.unlink(missing_ok=True)  # left behind by a killed session
-        return cls(session_id, _config(listen=path))
+        if sys.platform == "win32":
+            return cls._host_on_loopback(session_id, path)
+        return cls(session_id, _config(listen=f"unixsock-stream/{path}"))
+
+    @classmethod
+    def _host_on_loopback(cls, session_id: str, path: Path) -> Bus:
+        password = secrets.token_urlsafe(32)
+        endpoint = f"tcp/127.0.0.1:{_free_loopback_port()}"
+        # zenoh reads the credential dictionary while opening, so it lives only that long.
+        dictionary = path.with_suffix(".auth")
+        dictionary.write_text(f"{_BUS_USER}:{password}\n", encoding="utf-8", newline="\n")
+        try:
+            bus = cls(session_id, _config(listen=endpoint, password=password, dictionary=dictionary))
+        finally:
+            dictionary.unlink(missing_ok=True)
+        path.write_text(json.dumps({"endpoint": endpoint, "password": password}), encoding="utf-8")
+        bus._rendezvous = path
+        return bus
 
     @classmethod
     def join(cls, session_id: str) -> Bus:
         """A worker process's bus: connects to the hosting session."""
-        return cls(session_id, _config(connect=socket_path(session_id)))
+        path = socket_path(session_id)
+        if sys.platform == "win32":
+            rendezvous = json.loads(path.read_text(encoding="utf-8"))
+            return cls(session_id, _config(connect=rendezvous["endpoint"], password=rendezvous["password"]))
+        return cls(session_id, _config(connect=f"unixsock-stream/{path}"))
 
     def publish(self, key: str, message: BaseModel) -> None:
         self._session.put(self._prefix + key, message.model_dump_json())
@@ -280,6 +311,8 @@ class Bus:
         for declared in list(self._declared):
             declared.close()
         self._session.close()
+        if self._rendezvous is not None:
+            self._rendezvous.unlink(missing_ok=True)
 
     def __enter__(self) -> Self:
         return self
@@ -312,11 +345,28 @@ def _error_code(error: Exception) -> str:
     return code if isinstance(code, str) else "command_failed"
 
 
-def _config(*, listen: Path | None = None, connect: Path | None = None) -> zenoh.Config:
+def _free_loopback_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def _config(
+    *,
+    listen: str | None = None,
+    connect: str | None = None,
+    password: str | None = None,
+    dictionary: Path | None = None,
+) -> zenoh.Config:
     config = zenoh.Config()
     # The host routes, so workers that joined hear each other and not only the host.
     config.insert_json5("mode", '"router"' if listen else '"client"')
     config.insert_json5("scouting/multicast/enabled", "false")
-    config.insert_json5("listen/endpoints", json.dumps([f"unixsock-stream/{listen}"] if listen else []))
-    config.insert_json5("connect/endpoints", json.dumps([f"unixsock-stream/{connect}"] if connect else []))
+    config.insert_json5("listen/endpoints", json.dumps([listen] if listen else []))
+    config.insert_json5("connect/endpoints", json.dumps([connect] if connect else []))
+    if password is not None:
+        auth: dict[str, str] = {"user": _BUS_USER, "password": password}
+        if dictionary is not None:
+            auth["dictionary_file"] = str(dictionary)
+        config.insert_json5("transport/auth/usrpwd", json.dumps(auth))
     return config

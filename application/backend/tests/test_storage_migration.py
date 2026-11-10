@@ -175,9 +175,13 @@ def test_migration_rewrites_database_paths(tmp_path: Path, monkeypatch: pytest.M
             ]
         )
         session.commit()
+    # Windows cannot move a database file a pooled connection still holds open.
+    engine.dispose()
 
     migrate_default_storage_dir(settings, interactive=False)
 
+    engine = create_engine(f"sqlite:///{settings.data_dir / settings.database_file}")
+    session_factory = sessionmaker(bind=engine)
     with session_factory() as session:
         dataset_path = session.scalar(select(DatasetDB.path).where(DatasetDB.id == "dataset-1"))
         external_dataset_path = session.scalar(select(DatasetDB.path).where(DatasetDB.id == "dataset-2"))

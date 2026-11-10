@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -192,6 +193,10 @@ class TestHardwareApi:
 
         assert response.status_code == 500, response.text
 
+    @pytest.mark.skipif(
+        importlib.util.find_spec("physicalai_trossen_plugin") is None,
+        reason="physicalai-trossen-plugin is not available on this platform",
+    )
     def test_identify_trossen_calls_trossen_identifier(self):
         robot_manager = _StubRobotManager([])
         app.dependency_overrides[get_robot_manager_service] = lambda: robot_manager

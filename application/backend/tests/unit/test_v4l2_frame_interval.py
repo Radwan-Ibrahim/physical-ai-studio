@@ -15,6 +15,9 @@ from utils.v4l2_frame_interval import (
     fix_zero_frame_intervals,
 )
 
+# These drive the real fcntl and os.O_NONBLOCK, which only exist on POSIX hosts.
+requires_linux = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="needs a Linux host")
+
 
 class FakeDevice:
     """Simulates the G_PARM/S_PARM ioctls of a single V4L2 node."""
@@ -64,6 +67,7 @@ def test_struct_matches_kernel_abi():
     assert VIDIOC_S_PARM == 0xC0CC5616
 
 
+@requires_linux
 def test_repairs_zero_interval(fake_fd):
     device = FakeDevice(numerator=0, denominator=1)
     assert _run(device, fps=30) is True
@@ -71,12 +75,14 @@ def test_repairs_zero_interval(fake_fd):
     fake_fd[1].assert_called_once_with(42)
 
 
+@requires_linux
 def test_leaves_valid_interval_untouched(fake_fd):
     device = FakeDevice(numerator=1, denominator=30)
     assert _run(device) is False
     assert device.s_parm_calls == []
 
 
+@requires_linux
 def test_skips_nodes_without_g_parm(fake_fd):
     device = FakeDevice(g_parm_error=errno.EINVAL)
     assert _run(device) is False
@@ -84,17 +90,20 @@ def test_skips_nodes_without_g_parm(fake_fd):
     fake_fd[1].assert_called_once_with(42)
 
 
+@requires_linux
 def test_skips_devices_without_timeperframe_capability(fake_fd):
     device = FakeDevice(numerator=0, denominator=1, capability=0)
     assert _run(device) is False
     assert device.s_parm_calls == []
 
 
+@requires_linux
 def test_s_parm_failure_returns_false(fake_fd):
     device = FakeDevice(numerator=0, denominator=1, s_parm_error=errno.EBUSY)
     assert _run(device) is False
 
 
+@requires_linux
 def test_unopenable_device_returns_false():
     with (
         patch.object(v4l2.sys, "platform", "linux"),

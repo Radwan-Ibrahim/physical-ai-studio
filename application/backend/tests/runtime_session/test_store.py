@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import multiprocessing as mp
 import os
+import sys
 import uuid
 from multiprocessing import shared_memory
 
@@ -154,6 +155,9 @@ def test_mismatches_name_each_difference() -> None:
     ]
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows frees shared memory with its last handle; nothing to sweep"
+)
 def test_sweep_removes_only_blocks_whose_creator_is_gone(store: Store) -> None:
     gone = mp.get_context("spawn").Process(target=int)
     gone.start()

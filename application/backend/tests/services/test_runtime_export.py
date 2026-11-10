@@ -91,9 +91,10 @@ async def test_builder_emits_valid_runtime_recipe_and_round_trips(mocker: Any) -
     calibration = document["init_args"]["robot"]["init_args"]["robot"]["init_args"]["calibration"]
     assert isinstance(calibration, dict)
 
-    with NamedTemporaryFile(mode="w", suffix=".yaml") as config_file:
+    # delete_on_close=False: Windows cannot reopen a NamedTemporaryFile while it is still open.
+    with NamedTemporaryFile(mode="w", suffix=".yaml", delete_on_close=False) as config_file:
         config_file.write(Config.from_dict(document).to_yaml())
-        config_file.flush()
+        config_file.close()
         runtime = RobotRuntime.from_config(config_file.name)
     assert isinstance(runtime, RobotRuntime)
 

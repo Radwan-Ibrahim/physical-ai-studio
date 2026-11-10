@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import sys
 import time
 from typing import TYPE_CHECKING
 
@@ -133,6 +134,7 @@ async def test_cancelled_startup_stops_the_worker(worker_type, tmp_path: Path) -
     assert (tmp_path / "released").exists()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="os.kill(SIGTERM) is TerminateProcess on Windows; no handler runs")
 async def test_sigterm_stops_a_process_gracefully(tmp_path: Path) -> None:
     worker = FakeProcessWorker(tmp_path)
 

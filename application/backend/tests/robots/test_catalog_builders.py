@@ -15,6 +15,7 @@ than the hand-written convenience models.
 
 from __future__ import annotations
 
+import importlib.util
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -22,10 +23,17 @@ import pytest
 from physicalai.config import Config, instantiate
 from physicalai_so101_plugin import SO101
 from physicalai_so101_plugin.studio_catalog import SO101RobotPayload, _build_so101_driver
-from physicalai_trossen_plugin import BimanualWidowXAI
-from physicalai_trossen_plugin.studio_catalog import _build_trossen_bimanual_driver, _build_trossen_single_arm_driver
 
 from schemas.robot import RobotAdapter
+
+# The Trossen plugin is only published for Linux and macOS.
+HAS_TROSSEN = importlib.util.find_spec("physicalai_trossen_plugin") is not None
+if HAS_TROSSEN:
+    from physicalai_trossen_plugin import BimanualWidowXAI
+    from physicalai_trossen_plugin.studio_catalog import (
+        _build_trossen_bimanual_driver,
+        _build_trossen_single_arm_driver,
+    )
 
 DISPLAY_NAME = "My SO101 Arm #1"
 
@@ -131,6 +139,7 @@ class TestSO101Builder:
         with pytest.raises(ValueError, match="Could not resolve a serial port"):
             await _build_so101_driver(_so101_robot(), _StubFactory(port=None))
 
+    @pytest.mark.skipif(not HAS_TROSSEN, reason="needs a registered non-SO101 robot type")
     async def test_wrong_payload_type_is_rejected(self) -> None:
         wrong = _robot("Trossen_WidowXAI_Follower", {"connection_string": "192.168.1.2"})
 
@@ -138,6 +147,7 @@ class TestSO101Builder:
             await _build_so101_driver(wrong, _StubFactory())
 
 
+@pytest.mark.skipif(not HAS_TROSSEN, reason="physicalai-trossen-plugin is not available on this platform")
 class TestTrossenBuilders:
     async def test_single_arm_exports_driver_recipe(self) -> None:
         robot = _robot("Trossen_WidowXAI_Follower", {"connection_string": "192.168.1.2"})

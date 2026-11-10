@@ -1,5 +1,6 @@
 import asyncio
 import os
+import subprocess
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -45,7 +46,11 @@ def _restart_process() -> None:
     for argv in _restart_argv_candidates():
         executable = argv[0]
         try:
-            if os.path.sep in executable:
+            if sys.platform == "win32":
+                # Windows has no exec, and os.execv does not quote arguments containing spaces.
+                subprocess.Popen(argv)  # noqa: S603  # nosec B603 - re-launches this process with its own argv
+                os._exit(0)
+            elif os.path.sep in executable:
                 os.execv(executable, argv)  # noqa: S606  # nosec B606 - re-exec current process
             else:
                 os.execvp(executable, argv)  # noqa: S606  # nosec B606 - re-execs this process with its own argv, not external input

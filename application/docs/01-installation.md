@@ -9,6 +9,8 @@ Docker is the recommended path for most users:
 - Docker starts both backend and UI together.
 - You open one URL and can begin setting up projects right away.
 
+On Windows 11, install the [MSIX package](#install-on-windows-11-msix) instead.
+
 Use our native setup if you are planning to contribute to the project and want to make changes to either the backend or UI.
 
 ## Install with Docker (recommended)
@@ -31,6 +33,27 @@ docker compose up -d
 ```
 
 When startup is done, open `http://localhost:7860`.
+
+## Install on Windows 11 (MSIX)
+
+The MSIX package bundles Python, the backend, the UI and FFmpeg; nothing else needs installing.
+
+1. Download `PhysicalAIStudio_<version>_<cpu|xpu|cuda>_x64.msix` (pick `xpu` for Intel GPUs, `cuda` for NVIDIA GPUs).
+2. Double-click it and choose **Install**. For a development build signed with the throwaway
+   certificate, first trust the bundled `.cer` from an elevated PowerShell:
+
+   ```powershell
+   Import-Certificate -FilePath .\PhysicalAIStudioDev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+   ```
+
+3. Start **Physical AI Studio** from the Start menu. A console window shows the server log and the
+   UI opens in your browser at `http://127.0.0.1:7860`. Close the console window to stop Studio.
+
+Data is kept in `%LOCALAPPDATA%\physicalai` and survives uninstalling or upgrading the app.
+
+On Windows, USB cameras appear through Media Foundation and robot arms as `COM` ports.
+Trossen arms and Basler/GenICam cameras are not supported on Windows yet. To build the package
+yourself, see the [Windows packaging README](../windows/README.md).
 
 ## First UI check
 
@@ -77,6 +100,10 @@ sudo apt-get install -y \
 
 If you are using another Linux distribution, install equivalent packages before running
 the native setup steps below.
+
+On Windows, install [uv](https://docs.astral.sh/uv/getting-started/installation/), Node.js 24, and a
+[shared FFmpeg 4-8 build](https://www.ffmpeg.org/download.html#build-windows) whose `bin` folder is on
+`PATH`. Start the backend with `.\run.ps1` from `backend/` after `uv sync --extra cpu` (or `xpu`/`cuda`).
 
 ### Backend
 

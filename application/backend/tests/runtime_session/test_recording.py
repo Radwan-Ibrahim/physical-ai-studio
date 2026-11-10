@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import signal
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -421,7 +419,7 @@ async def test_a_dead_dataset_worker_unloads_the_dataset(new_session, fake_camer
     statuses = subscribe_statuses(session)
     await session.load_environment(make_environment())
     await session.load_dataset(_dataset())
-    os.kill(session._dataset.value._worker.pid, signal.SIGKILL)
+    session._dataset.value._worker.kill()
 
     status = await next_status(statuses, "dataset")
     assert status.state == "failed"

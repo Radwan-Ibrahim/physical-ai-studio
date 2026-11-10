@@ -3,16 +3,38 @@
 
 """AsyncSSH host-key verification and first-use persistence."""
 
-import fcntl
 import os
-from collections.abc import Sequence
+import sys
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 import asyncssh
 from loguru import logger
 
 from exceptions import SshHostKeyConfirmationRequiredError, SshHostKeyMismatchError, SshHostKeyUnknownError
+
+
+@contextmanager
+def _exclusive_lock(file: BinaryIO) -> Iterator[None]:
+    """Hold an exclusive lock on ``file`` (positioned at offset 0) for the block."""
+    if sys.platform == "win32":
+        import msvcrt
+
+        # Windows locks byte ranges; locking the first byte (even past EOF) serialises writers.
+        msvcrt.locking(file.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            yield
+        finally:
+            file.seek(0)
+            msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(file, fcntl.LOCK_EX)
+        yield
 
 
 @dataclass(slots=True)
@@ -84,8 +106,7 @@ class AsyncSshHostKeyVerifier:
         host_pattern = host if port == 22 else f"[{host}]:{port}"
         entry = host_pattern.encode() + b" " + key.export_public_key().strip() + b"\n"
         descriptor = os.open(self._known_hosts_path, os.O_CREAT | os.O_RDWR, 0o600)
-        with os.fdopen(descriptor, "r+b") as known_hosts_file:
-            fcntl.flock(known_hosts_file, fcntl.LOCK_EX)
+        with os.fdopen(descriptor, "r+b") as known_hosts_file, _exclusive_lock(known_hosts_file):
             current = asyncssh.match_known_hosts(known_hosts_file.read(), host, addr, port)
             trusted_keys, ca_keys, revoked_keys = current[:3]
             if revoked_keys or ca_keys:

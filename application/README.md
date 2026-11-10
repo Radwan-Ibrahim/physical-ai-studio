@@ -49,6 +49,7 @@ The application provides a graphical interface to:
 | **[Backend](./backend/)** | FastAPI server for data management and training orchestration. | [Backend README](./backend/README.md) |
 | **[UI](./ui/)**           | React web application.                                         | [UI README](./ui/README.md)           |
 | **[Docker](./docker/)**   | Containerized application runtime.                             | [Docker README](./docker/README.md)   |
+| **[Windows](./windows/)** | Windows 11 MSIX package.                                       | [Windows README](./windows/README.md) |
 
 ## See Also
 

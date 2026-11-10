@@ -6,6 +6,7 @@
 import asyncio
 import os
 import signal
+import sys
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
@@ -48,6 +49,10 @@ def request_graceful_restart() -> None:
     set that flag first - this function only requests the shutdown half of
     that sequence.
     """
+    if sys.platform == "win32":
+        # os.kill() on Windows calls TerminateProcess; raise_signal runs uvicorn's handler instead.
+        signal.raise_signal(signal.SIGTERM)
+        return
     os.kill(os.getpid(), signal.SIGTERM)
 
 

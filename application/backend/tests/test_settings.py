@@ -8,6 +8,19 @@ from build_info import get_build_info
 from settings import Settings, get_default_storage_dir, load_user_settings_file, merge_user_settings
 
 
+def _set_home(monkeypatch: pytest.MonkeyPatch, home: Path) -> None:
+    # expanduser() reads HOME on POSIX and USERPROFILE on Windows.
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+
+def test_default_storage_dir_uses_windows_local_app_data(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings_module.sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "AppData" / "Local"))
+
+    assert get_default_storage_dir() == tmp_path / "AppData" / "Local" / "physicalai"
+
+
 def test_default_storage_dir_uses_xdg_data_home(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings_module.sys, "platform", "linux")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
@@ -17,7 +30,7 @@ def test_default_storage_dir_uses_xdg_data_home(monkeypatch, tmp_path: Path) -> 
 
 def test_default_storage_dir_ignores_relative_xdg_data_home(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings_module.sys, "platform", "linux")
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _set_home(monkeypatch, tmp_path)
     monkeypatch.setenv("XDG_DATA_HOME", "relative/path")
 
     assert get_default_storage_dir() == tmp_path / ".local" / "share" / "physicalai"
@@ -25,13 +38,13 @@ def test_default_storage_dir_ignores_relative_xdg_data_home(monkeypatch, tmp_pat
 
 def test_default_storage_dir_uses_macos_application_support(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings_module.sys, "platform", "darwin")
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _set_home(monkeypatch, tmp_path)
 
     assert get_default_storage_dir() == tmp_path / "Library" / "Application Support" / "physicalai"
 
 
 def test_storage_dir_override_expands_user(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _set_home(monkeypatch, tmp_path)
 
     settings = Settings(STORAGE_DIR="~/custom-storage")
 
@@ -94,7 +107,7 @@ def test_build_info_does_not_probe_git_when_build_metadata_is_injected(monkeypat
 
 
 def test_data_dir_is_storage_backed_even_with_data_dir_env(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _set_home(monkeypatch, tmp_path)
     custom_data_dir = tmp_path / "custom-data"
     monkeypatch.setenv("DATA_DIR", str(custom_data_dir))
 

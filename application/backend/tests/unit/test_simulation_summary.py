@@ -166,7 +166,9 @@ def test_summary_uses_saved_rollouts_when_result_rollouts_are_invalid(tmp_path):
 
 @pytest.mark.parametrize("artifact_url", ["", ARTIFACT_URL])
 def test_workflow_writes_fallback_when_renderer_environment_fails(tmp_path, artifact_url):
-    workflow = yaml.safe_load((SCRIPT.parents[1] / "workflows/simulation-application-e2e.yml").read_text())
+    workflow = yaml.safe_load(
+        (SCRIPT.parents[1] / "workflows/simulation-application-e2e.yml").read_text(encoding="utf-8")
+    )
     command = workflow["jobs"]["simulation"]["steps"][-1]["run"]
     uv = tmp_path / "uv"
     uv.write_text('#!/bin/sh\nprintf "%s\\n" "$*" > "$UV_ARGS"\nexit 1\n')

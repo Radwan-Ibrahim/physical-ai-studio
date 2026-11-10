@@ -43,7 +43,7 @@ def test_to_schema_serializes_paths_without_mutating_payload(calibration_dir):
 
     assert json.loads(json.dumps(model.payload)) == {
         "calibration_dir": None if calibration_dir is None else str(calibration_dir),
-        "camera_paths": {"front": ["/dev/video0"]},
+        "camera_paths": {"front": [str(Path("/dev/video0"))]},
     }
     assert robot.payload.calibration_dir == calibration_dir
     assert isinstance(robot.payload.camera_paths["front"][0], Path)
@@ -72,13 +72,13 @@ async def test_create_and_update_persist_path_payloads(monkeypatch):
 
             await service.create_robot(project_id, robot)
             stored = await session.get(ProjectRobotDB, str(robot.id))
-            assert stored.payload["calibration_dir"] == "/calibration/original"
+            assert stored.payload["calibration_dir"] == str(Path("/calibration/original"))
 
             updated = robot.model_copy(update={"payload": PathPayload(calibration_dir=Path("/calibration/updated"))})
             restored = await service.update_robot(project_id, updated)
             await session.refresh(stored)
 
-            assert stored.payload["calibration_dir"] == "/calibration/updated"
+            assert stored.payload["calibration_dir"] == str(Path("/calibration/updated"))
             assert restored.payload.calibration_dir == Path("/calibration/updated")
             assert isinstance(restored.payload.calibration_dir, Path)
     finally:

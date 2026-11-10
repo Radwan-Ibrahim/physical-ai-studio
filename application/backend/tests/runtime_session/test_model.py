@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import signal
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -119,7 +117,7 @@ async def test_a_dead_model_worker_unloads_the_model_and_holds(
     await session.load_environment(make_environment())
     await session.load_model(_model(tmp_path), "torch", "cpu")
     await session.set_control(ModelControlConfig(hz=50))
-    os.kill(session._model.value._worker.pid, signal.SIGKILL)
+    session._model.value._worker.kill()
     await _until(lambda: session.state().model is None and session.state().control is None)
     # The environment is untouched.
     assert session.state().environment is not None

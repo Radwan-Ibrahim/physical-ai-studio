@@ -1,0 +1,78 @@
+name: Windows MSIX
+
+on:
+  pull_request:
+    paths:
+      - application/windows/**
+      - .github/workflows/windows-msix.yml
+  workflow_dispatch:
+    inputs:
+      extra:
+        description: PyTorch build to bundle
+        type: choice
+        options: [cpu, xpu, cuda]
+        default: cpu
+
+permissions: {} # No permissions by default on workflow level
+
+concurrency:
+  group: windows-msix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build MSIX (${{ inputs.extra || 'cpu' }})
+    runs-on: windows-2025
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Build and sign MSIX
+        shell: pwsh
+        env:
+          EXTRA: ${{ inputs.extra || 'cpu' }}
+          # Optional: base64 PFX and its password; without them the package is signed with a throwaway certificate.
+          SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+          SIGNING_PUBLISHER: ${{ vars.WINDOWS_SIGNING_PUBLISHER }}
+        run: |
+          if ($env:SIGNING_PFX_BASE64) {
+            $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+            $password = ConvertTo-SecureString $env:SIGNING_PFX_PASSWORD -AsPlainText -Force
+            ./application/windows/build_msix.ps1 -Extra $env:EXTRA -Publisher $env:SIGNING_PUBLISHER `
+              -CertificatePath $pfx -CertificatePassword $password
+            Remove-Item $pfx
+          } else {
+            ./application/windows/build_msix.ps1 -Extra $env:EXTRA -DevCertificate
+          }
+
+      - name: Smoke-test the packaged interpreter
+        shell: pwsh
+        run: |
+          $stage = "application/windows/dist/stage"
+          $env:PATH = "$((Resolve-Path "$stage/ffmpeg/bin").Path);$env:PATH"
+          & "$stage/python/python.exe" -I -c "import main, torchcodec, physicalai.robot.transport; print('packaged backend imports OK')"
+
+      - name: Upload MSIX
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: physicalai-studio-msix-${{ inputs.extra || 'cpu' }}
+          path: |
+            application/windows/dist/*.msix
+            application/windows/dist/*.cer
+          if-no-files-found: error
+          retention-days: 14

@@ -8,12 +8,14 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from physicalai_trossen_plugin.studio_catalog import TrossenBimanualPayload
 
 from repositories.mappers.project_robot_mapper import ProjectRobotMapper
 from robots.catalog.registry import RobotCatalogRegistry
 from schemas.environment import RobotWithTeleoperator, TeleoperatorNoneWithRobot
 from schemas.robot import RobotAdapter, UnavailableRobot
+
+# The Trossen plugin is only published for Linux and macOS.
+TrossenBimanualPayload = pytest.importorskip("physicalai_trossen_plugin.studio_catalog").TrossenBimanualPayload
 
 
 def _make_bimanual_db_model(robot_type: str):
