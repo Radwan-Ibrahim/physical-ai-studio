@@ -149,6 +149,9 @@ if (-not $SkipBuild) {
     $installed = Get-ChildItem $pythonInstall -Directory | Where-Object { Test-Path (Join-Path $_.FullName "python.exe") } | Select-Object -First 1
     if (-not $installed) { throw "uv did not install a standalone CPython into $pythonInstall" }
     Copy-Item $installed.FullName $PythonDir -Recurse
+    # Studio has no Tk UI, and signtool cannot sign an MSIX containing these Tcl/Tk DLLs (0x800700C1).
+    Remove-Item (Join-Path $PythonDir "DLLs\tcl86t.dll"), (Join-Path $PythonDir "DLLs\tk86t.dll"), (Join-Path $PythonDir "DLLs\_tkinter.pyd") -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $PythonDir "tcl"), (Join-Path $PythonDir "Lib\tkinter"), (Join-Path $PythonDir "Lib\idlelib"), (Join-Path $PythonDir "Lib\turtledemo") -Recurse -ErrorAction SilentlyContinue
     uv venv $Venv --python (Join-Path $PythonDir "python.exe")
 
     # 2. Dependencies first: the OpenAPI schema the UI is typed from needs the backend importable.
